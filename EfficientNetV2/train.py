@@ -3,7 +3,7 @@ import tensorflow as tf
 import numpy as np
 from model import build_model
 
-def train(epochs=1, batch_size=8, save_path="efficientnet_v2_model.keras"):
+def train_pipeline(epochs=1, batch_size=8, save_path="efficientnet_v2_model.keras"):
     gpus = tf.config.list_physical_devices('GPU')
     print(f"GPUs disponíveis para uso: {len(gpus)}")
 
