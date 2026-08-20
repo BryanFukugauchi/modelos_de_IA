@@ -51,7 +51,7 @@ def create_tf_dataset(df, batch_size=16, img_size=(224, 224)):
     
     return dataset
 
-def train(epochs=5, batch_size=16, architecture="tiny", save_path="convnext_model.keras"):
+def train(epochs=5, batch_size=16, save_path="convnext_model.keras"):
     print("Mapeando imagens do dataset HAM10000...")
     df = load_ham10000_data()
     print(f"Total de imagens encontradas: {len(df)}")
