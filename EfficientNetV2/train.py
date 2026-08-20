@@ -8,27 +8,20 @@ from model import build_model
 DATASET_PATH = "/kaggle/input/skin-cancer-mnist-ham10000"
 
 def load_ham10000_data():
-    """Localiza o arquivo de metadados automaticamente e mapeia os caminhos das imagens."""
-    
-    # Busca o arquivo CSV em qualquer subpasta dentro de /kaggle/input/
+    # Procura o arquivo HAM10000_metadata.csv em qualquer subpasta de /kaggle/input/
     csv_matches = glob.glob("/kaggle/input/**/HAM10000_metadata.csv", recursive=True)
     
     if not csv_matches:
-        conteudo_input = os.listdir('/kaggle/input') if os.path.exists('/kaggle/input') else []
-        raise FileNotFoundError(
-            f"\n\n[ERRO] O arquivo HAM10000_metadata.csv não foi encontrado.\n"
-            f"Pastas encontradas em /kaggle/input: {conteudo_input}\n"
-            f"Verifique se o dataset foi adicionado ao notebook no menu lateral do Kaggle."
-        )
+        raise FileNotFoundError("Não foi possível encontrar HAM10000_metadata.csv em /kaggle/input/")
 
+    # Pega o caminho exato encontrado no disco
     metadata_path = csv_matches[0]
-    # Pega o diretório raiz onde o CSV e as imagens estão localizados
     base_dir = os.path.dirname(metadata_path)
-    print(f"Dataset localizado com sucesso em: {base_dir}")
+    print(f"Dataset carregado com sucesso de: {base_dir}")
 
     df = pd.read_csv(metadata_path)
 
-    # Mapeia todas as imagens .jpg presentes no diretório raiz do dataset
+    # Mapeia todas as imagens .jpg presentes nas subpastas do dataset
     all_image_paths = glob.glob(os.path.join(base_dir, "**", "*.jpg"), recursive=True)
     image_path_map = {
         os.path.splitext(os.path.basename(x))[0]: x for x in all_image_paths
