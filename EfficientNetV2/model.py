@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras import layers, models
 
-def build_model(input_shape=(224, 224, 3), num_classes=2, pretrained=True):
+def build_model(input_shape=(224, 224, 3), num_classes=7, pretrained=True):
     """
     Constrói a arquitetura do modelo usando EfficientNetV2-S.
     """
