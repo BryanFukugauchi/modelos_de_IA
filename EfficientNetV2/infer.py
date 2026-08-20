@@ -2,6 +2,16 @@ import argparse
 import tensorflow as tf
 import numpy as np
 
+CLASSES_HAM10000 = {
+    0: "akiec - Queratose Actínica",
+    1: "bcc - Carcinoma Basocelular",
+    2: "bkl - Lesão Benigna do Tipo Queratose",
+    3: "df - Dermatofibroma",
+    4: "mel - Melanoma",
+    5: "nv - Nevo Melanocítico (Pinta comum)",
+    6: "vasc - Lesão Vascular"
+}
+
 def predict(image_array, model):
     if len(image_array.shape) == 3:
         image_array = np.expand_dims(image_array, axis=0)
