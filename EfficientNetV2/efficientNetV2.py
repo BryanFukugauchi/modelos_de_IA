@@ -1,5 +1,5 @@
 from model import build_model
-from train import train_pipeline
+from train import train
 from infer import predict
 
 class EfficientNetV2:
@@ -7,7 +7,7 @@ class EfficientNetV2:
         self.model = build_model()
     
     def train(self):
-        train_pipeline()
+        train()
 
     def predict(self, image):
         return predict(image, self.model)
