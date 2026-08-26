@@ -59,8 +59,11 @@ def train(epochs=5, batch_size=16, save_path="derm_foundation_model.keras"):
 
     print("Iniciando treinamento...")
     model.fit(train_ds, validation_data=val_ds, epochs=epochs)
+
     model.save(save_path)
     print(f"Modelo salvo em: {save_path}")
+
+    return model  # RETORNO ADICIONADO
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

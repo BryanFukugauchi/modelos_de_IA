@@ -12,29 +12,28 @@ CLASSES_HAM10000 = {
     6: "vasc - Lesão Vascular"
 }
 
-def predict(image_array, model):
-    if len(image_array.shape) == 3:
-        image_array = np.expand_dims(image_array, axis=0)
+def predict(image_path, model):
+    # Carrega e pré-processa a imagem real do disco
+    img = tf.keras.utils.load_img(image_path, target_size=(224, 224))
+    img_array = tf.keras.utils.img_to_array(img)
+    img_array = tf.expand_dims(img_array, axis=0)
 
-    predictions = model.predict(image_array, verbose=0)
+    predictions = model.predict(img_array, verbose=0)
     predicted_class = np.argmax(predictions, axis=1)[0]
     confidence = predictions[0][predicted_class]
 
     return predicted_class, confidence
 
-def main(model_path="efficientnet_v2_model.keras"):
-    print(f"Carregando modelo de: {model_path}")
-    model = tf.keras.models.load_model(model_path)
-
-    # Simula uma imagem de entrada [224, 224, 3]
-    dummy_input = np.random.randn(224, 224, 3).astype(np.float32)
-
-    pred_class, confidence = predict(dummy_input, model)
-    print(f"Classe prevista: {pred_class} | Confiança: {confidence:.2%}")
+def main(model_path="ham10000_efficientnetv2.keras", image_path=None):
+    model = tf.keras.models.load_model(model_path, compile=False)
+    if image_path:
+        pred_class, confidence = predict(image_path, model)
+        print(f"Diagnóstico: {CLASSES_HAM10000.get(pred_class, 'Desconhecido')} | Confiança: {confidence:.2%}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Inferência com EfficientNetV2")
-    parser.add_argument("--model_path", type=str, default="efficientnet_v2_model.keras", help="Caminho do arquivo .keras")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_path", type=str, default="ham10000_efficientnetv2.keras")
+    parser.add_argument("--image_path", type=str, required=True, help="Caminho para uma imagem real (.jpg / .png)")
     args = parser.parse_args()
 
-    main(model_path=args.model_path)
+    main(model_path=args.model_path, image_path=args.image_path)

@@ -51,10 +51,9 @@ def create_tf_dataset(df, batch_size=16, img_size=(224, 224)):
     
     return dataset
 
-def train(epochs=5, batch_size=16, save_path="convnext_model.keras"):
+def train(epochs=5, batch_size=16, architecture="tiny", save_path="convnext_model.keras"):
     print("Mapeando imagens do dataset HAM10000...")
     df = load_ham10000_data()
-    print(f"Total de imagens encontradas: {len(df)}")
 
     val_df = df.sample(frac=0.2, random_state=42)
     train_df = df.drop(val_df.index)
@@ -72,14 +71,12 @@ def train(epochs=5, batch_size=16, save_path="convnext_model.keras"):
     )
 
     print("Iniciando treinamento...")
-    model.fit(
-        train_ds,
-        validation_data=val_ds,
-        epochs=epochs
-    )
+    model.fit(train_ds, validation_data=val_ds, epochs=epochs)
 
     model.save(save_path)
-    print(f"Modelo salvo com sucesso em: {save_path}")
+    print(f"Modelo salvo em: {save_path}")
+    
+    return model  # Retorna a instância treinada
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Treino do ConvNeXt para HAM10000")

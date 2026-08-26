@@ -1,5 +1,6 @@
 import argparse
 import tensorflow as tf
+import tensorflow_hub as hub
 import numpy as np
 
 CLASSES_HAM10000 = {
@@ -24,7 +25,11 @@ def predict(image_path, model):
     return predicted_class, confidence
 
 def main(model_path="derm_foundation_model.keras", image_path=None):
-    model = tf.keras.models.load_model(model_path, compile=False)
+    model = tf.keras.models.load_model(
+        model_path, 
+        custom_objects={'KerasLayer': hub.KerasLayer},
+        compile=False
+    )
     if image_path:
         pred_class, confidence = predict(image_path, model)
         print(f"Diagnóstico: {CLASSES_HAM10000.get(pred_class, 'Desconhecido')} | Confiança: {confidence:.2%}")
@@ -32,7 +37,7 @@ def main(model_path="derm_foundation_model.keras", image_path=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", type=str, default="derm_foundation_model.keras")
-    parser.add_argument("--image_path", type=str, default=None)
+    parser.add_argument("--image_path", type=str, required=True, help="Caminho para imagem (.jpg / .png)")
     args = parser.parse_args()
 
     main(model_path=args.model_path, image_path=args.image_path)
