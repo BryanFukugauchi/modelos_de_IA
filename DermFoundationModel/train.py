@@ -59,6 +59,24 @@ def train(epochs=5, batch_size=16, save_path="derm_foundation_model.keras"):
 
     print("Iniciando treinamento...")
     model.fit(train_ds, validation_data=val_ds, epochs=epochs)
+    from sklearn.utils.class_weight import compute_class_weight
+    import numpy as np
+
+    # Calcula os pesos inversamente proporcionais à frequência das classes
+    class_weights = compute_class_weight(
+        class_weight='balanced',
+        classes=np.unique(train_df['label']),
+        y=train_df['label'].values
+    )
+    class_weight_dict = dict(enumerate(class_weights))
+
+    # Passe a variável class_weight dentro do fit:
+    model.fit(
+        train_ds,
+        validation_data=val_ds,
+        epochs=epochs,
+        class_weight=class_weight_dict  # <--- Adicione esta linha
+    )
 
     model.save(save_path)
     print(f"Modelo salvo em: {save_path}")
