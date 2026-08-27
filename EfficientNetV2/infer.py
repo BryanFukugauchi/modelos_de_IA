@@ -13,7 +13,6 @@ CLASSES_HAM10000 = {
 }
 
 def predict(image_path, model):
-    # Carrega e pré-processa a imagem real do disco
     img = tf.keras.utils.load_img(image_path, target_size=(224, 224))
     img_array = tf.keras.utils.img_to_array(img)
     img_array = tf.expand_dims(img_array, axis=0)
@@ -25,15 +24,20 @@ def predict(image_path, model):
     return predicted_class, confidence
 
 def main(model_path="ham10000_efficientnetv2.keras", image_path=None):
-    model = tf.keras.models.load_model(model_path, compile=False)
+    print(f"Carregando modelo de: {model_path}")
+    model = tf.keras.models.load_model(model_path)
+
     if image_path:
         pred_class, confidence = predict(image_path, model)
-        print(f"Diagnóstico: {CLASSES_HAM10000.get(pred_class, 'Desconhecido')} | Confiança: {confidence:.2%}")
+        nome_classe = CLASSES_HAM10000.get(pred_class, "Desconhecido")
+        print(f"Diagnóstico: {nome_classe} | Confiança: {confidence:.2%}")
+    else:
+        print("Modelo carregado com sucesso.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", type=str, default="ham10000_efficientnetv2.keras")
-    parser.add_argument("--image_path", type=str, required=True, help="Caminho para uma imagem real (.jpg / .png)")
+    parser = argparse.ArgumentParser(description="Inferência com EfficientNetV2")
+    parser.add_argument("--model_path", type=str, default="ham10000_efficientnetv2.keras", help="Caminho do arquivo .keras")
+    parser.add_argument("--image_path", type=str, default=None, help="Caminho da imagem a classificar")
     args = parser.parse_args()
 
     main(model_path=args.model_path, image_path=args.image_path)
