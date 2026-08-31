@@ -28,6 +28,14 @@ def load_ham10000_data():
     }
 
     df["path"] = df["image_id"].map(image_path_map)
+
+    # Descarta linhas cujo image_id não tem um .jpg correspondente no disco —
+    # sem isso, tf.io.read_file() quebra ao receber um caminho NaN.
+    linhas_sem_imagem = df["path"].isna().sum()
+    if linhas_sem_imagem > 0:
+        print(f"Aviso: {linhas_sem_imagem} imagens do CSV não foram encontradas no disco e serão ignoradas.")
+        df = df.dropna(subset=["path"]).reset_index(drop=True)
+
     df["label"] = pd.Categorical(df["dx"]).codes
 
     return df
