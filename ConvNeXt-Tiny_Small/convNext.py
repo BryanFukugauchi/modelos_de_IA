@@ -1,4 +1,3 @@
-from model import build_model
 from train import train
 from infer import predict, CLASSES_HAM10000
 
@@ -10,9 +9,11 @@ class ConvNeXt:
         self.architecture = architecture
         self.classes = CLASSES_HAM10000
 
-    def train(self, epochs=5, batch_size=16, save_path="convnext_model.keras"):
+    def train(self, epochs_cabeca=10, epochs_fine_tuning=10, batch_size=32,
+              save_path="convnext_model.keras"):
         train(
-            epochs=epochs,
+            epochs_cabeca=epochs_cabeca,
+            epochs_fine_tuning=epochs_fine_tuning,
             batch_size=batch_size,
             architecture=self.architecture,
             save_path=save_path

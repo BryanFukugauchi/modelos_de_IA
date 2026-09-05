@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
 
 from model import (
     build_model,
@@ -105,6 +106,13 @@ def calcular_ou_carregar_embeddings(df: pd.DataFrame) -> np.ndarray:
     return embeddings
 
 
+def calcular_class_weight(labels):
+    """Compensa o desbalanceamento do HAM10000 ('nv' domina ~67% dos dados)."""
+    classes = np.unique(labels)
+    pesos = compute_class_weight(class_weight="balanced", classes=classes, y=labels)
+    return dict(zip(classes.tolist(), pesos.tolist()))
+
+
 def train(epochs=20, batch_size=32, save_path="derm_foundation_model.keras"):
     print("Mapeando imagens do dataset HAM10000...")
     df = load_ham10000_data()
@@ -117,6 +125,9 @@ def train(epochs=20, batch_size=32, save_path="derm_foundation_model.keras"):
         embeddings, labels, test_size=0.2, random_state=42, stratify=labels
     )
 
+    class_weight = calcular_class_weight(y_train)
+    print(f"Pesos de classe (compensando desbalanceamento): {class_weight}")
+
     model = build_model(num_classes=len(np.unique(labels)))
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
@@ -124,16 +135,22 @@ def train(epochs=20, batch_size=32, save_path="derm_foundation_model.keras"):
         metrics=["accuracy"],
     )
 
+    callbacks = [
+        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=4, restore_best_weights=True),
+        tf.keras.callbacks.ModelCheckpoint(save_path, monitor="val_accuracy", save_best_only=True),
+    ]
+
     print("Iniciando treinamento do classificador sobre os embeddings...")
     model.fit(
         X_train, y_train,
         validation_data=(X_val, y_val),
         epochs=epochs,
         batch_size=batch_size,
+        class_weight=class_weight,
+        callbacks=callbacks,
     )
 
-    model.save(save_path)
-    print(f"Modelo salvo com sucesso em: {save_path}")
+    print(f"\nMelhor modelo (por val_accuracy) salvo automaticamente em: {save_path}")
 
 
 if __name__ == "__main__":

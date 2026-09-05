@@ -5,9 +5,11 @@ class EfficientNetV2:
     def __init__(self):
         self.classes = CLASSES_HAM10000
 
-    def train(self, epochs=5, batch_size=16, save_path="ham10000_efficientnetv2.keras"):
+    def train(self, epochs_cabeca=10, epochs_fine_tuning=10, batch_size=32,
+              save_path="ham10000_efficientnetv2.keras"):
         train(
-            epochs=epochs,
+            epochs_cabeca=epochs_cabeca,
+            epochs_fine_tuning=epochs_fine_tuning,
             batch_size=batch_size,
             save_path=save_path
         )

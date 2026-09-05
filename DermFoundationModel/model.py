@@ -122,9 +122,14 @@ def build_model(num_classes: int = 7) -> tf.keras.Model:
     embeddings JÁ CALCULADOS e aprende a mapeá-los para as classes do
     HAM10000. O backbone pesado fica de fora deste grafo — é congelado e
     usado só como pré-processamento, conforme a documentação oficial.
+
+    Regularização mais forte que a versão anterior (L2 + dropout maior):
+    como o classificador é a única parte treinável, com poucas dezenas
+    de imagens por classe ele overfita rápido nos embeddings de treino
+    se não for contido.
     """
     entradas = tf.keras.Input(shape=(EMBEDDING_DIM,))
-    x = layers.Dense(256, activation="relu")(entradas)
-    x = layers.Dropout(0.3)(x)
+    x = layers.Dense(128, activation="relu", kernel_regularizer=tf.keras.regularizers.l2(1e-3))(entradas)
+    x = layers.Dropout(0.5)(x)
     saidas = layers.Dense(num_classes, activation="softmax")(x)
     return models.Model(entradas, saidas, name="DermFoundation_Classifier")

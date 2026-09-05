@@ -1,46 +1,67 @@
+"""
+train.py — Treino do EfficientNetV2-S no HAM10000, em duas fases.
+
+Mudanças em relação à versão anterior (para corrigir o overfitting:
+acurácia alta no treino, baixa em imagens novas):
+
+  1. Split ESTRATIFICADO (preserva a proporção de cada classe em
+     treino/validação — importante com classes raras como 'df'/'vasc').
+  2. class_weight — compensa o forte desbalanceamento do HAM10000
+     (a classe 'nv' domina ~67% dos dados).
+  3. Treino em DUAS FASES: cabeça (backbone congelado) e depois
+     fine-tuning das últimas camadas com learning rate bem menor.
+  4. EarlyStopping + ModelCheckpoint(save_best_only=True) — nunca mais
+     salva um modelo pior que um checkpoint anterior por overfitting
+     nas últimas épocas.
+"""
+
 import os
-import glob
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 import argparse
+import glob
+
+import numpy as np
 import pandas as pd
 import tensorflow as tf
-from model import build_model
+from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
+
+from model import build_model, descongelar_backbone
 
 DATASET_PATH = "/kaggle/input/skin-cancer-mnist-ham10000"
 
+
 def load_ham10000_data():
-    # Procura o arquivo HAM10000_metadata.csv em qualquer subpasta de /kaggle/input/
+    """Busca automaticamente o arquivo HAM10000_metadata.csv em qualquer pasta do Kaggle."""
     csv_matches = glob.glob("/kaggle/input/**/HAM10000_metadata.csv", recursive=True)
-    
+
     if not csv_matches:
         raise FileNotFoundError("Não foi possível encontrar HAM10000_metadata.csv em /kaggle/input/")
 
-    # Pega o caminho exato encontrado no disco
     metadata_path = csv_matches[0]
     base_dir = os.path.dirname(metadata_path)
     print(f"Dataset carregado com sucesso de: {base_dir}")
 
     df = pd.read_csv(metadata_path)
 
-    # Mapeia todas as imagens .jpg presentes nas subpastas do dataset
     all_image_paths = glob.glob(os.path.join(base_dir, "**", "*.jpg"), recursive=True)
     image_path_map = {
         os.path.splitext(os.path.basename(x))[0]: x for x in all_image_paths
     }
-
     df["path"] = df["image_id"].map(image_path_map)
 
-    # Descarta linhas cujo image_id não tem um .jpg correspondente no disco —
-    # sem isso, tf.io.read_file() quebra ao receber um caminho NaN.
+    # Descarta linhas cujo image_id não tem um .jpg correspondente no disco.
     linhas_sem_imagem = df["path"].isna().sum()
     if linhas_sem_imagem > 0:
         print(f"Aviso: {linhas_sem_imagem} imagens do CSV não foram encontradas no disco e serão ignoradas.")
         df = df.dropna(subset=["path"]).reset_index(drop=True)
 
     df["label"] = pd.Categorical(df["dx"]).codes
-
     return df
 
-def create_tf_dataset(df, batch_size=32, img_size=(224, 224)):
+
+def create_tf_dataset(df, batch_size=32, img_size=(224, 224), embaralhar=True):
     """Carrega as imagens do disco e redimensiona para 224x224 em tempo de execução."""
     def parse_function(filename, label):
         image_string = tf.io.read_file(filename)
@@ -53,45 +74,99 @@ def create_tf_dataset(df, batch_size=32, img_size=(224, 224)):
 
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
     dataset = dataset.map(parse_function, num_parallel_calls=tf.data.AUTOTUNE)
-    dataset = dataset.shuffle(buffer_size=1000).batch(batch_size).prefetch(tf.data.AUTOTUNE)
-    
-    return dataset
+    if embaralhar:
+        dataset = dataset.shuffle(buffer_size=1000)
+    return dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
-def train(epochs=5, batch_size=16, save_path="ham10000_efficientnetv2.keras"):
+
+def calcular_class_weight(labels):
+    """
+    HAM10000 é extremamente desbalanceado ('nv' domina ~67% dos dados).
+    Sem isso, o modelo tende a "chutar" a classe majoritária e ainda
+    parecer bem na acurácia geral.
+    """
+    classes = np.unique(labels)
+    pesos = compute_class_weight(class_weight="balanced", classes=classes, y=labels)
+    return dict(zip(classes.tolist(), pesos.tolist()))
+
+
+def train(
+    epochs_cabeca=10,
+    epochs_fine_tuning=10,
+    batch_size=32,
+    camadas_para_descongelar=20,
+    save_path="ham10000_efficientnetv2.keras",
+):
     print("Mapeando imagens do dataset HAM10000...")
     df = load_ham10000_data()
     print(f"Total de imagens encontradas: {len(df)}")
 
-    # Divisão simples de dados (80% treino, 20% validação)
-    val_df = df.sample(frac=0.2, random_state=42)
-    train_df = df.drop(val_df.index)
+    # Split ESTRATIFICADO — preserva a proporção de cada classe.
+    train_df, val_df = train_test_split(
+        df, test_size=0.2, random_state=42, stratify=df["label"]
+    )
+    print(f"Treino: {len(train_df)} imagens | Validação: {len(val_df)} imagens")
 
-    train_ds = create_tf_dataset(train_df, batch_size=batch_size)
-    val_ds = create_tf_dataset(val_df, batch_size=batch_size)
+    train_ds = create_tf_dataset(train_df, batch_size=batch_size, embaralhar=True)
+    val_ds = create_tf_dataset(val_df, batch_size=batch_size, embaralhar=False)
 
-    # Constrói o modelo com 7 classes
-    model = build_model(input_shape=(224, 224, 3), num_classes=7, pretrained=True)
+    class_weight = calcular_class_weight(train_df["label"].values)
+    print(f"Pesos de classe (compensando desbalanceamento): {class_weight}")
 
+    model, backbone = build_model(input_shape=(224, 224, 3), num_classes=7, pretrained=True)
+
+    callbacks = [
+        tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=3, restore_best_weights=True),
+        tf.keras.callbacks.ModelCheckpoint(save_path, monitor="val_accuracy", save_best_only=True),
+    ]
+
+    # --- Fase 1: treina só a cabeça, com o backbone congelado ---
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-4),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
         loss='sparse_categorical_crossentropy',
         metrics=['accuracy']
     )
-
-    print("Iniciando treinamento com HAM10000...")
+    print("\n=== Fase 1: treinando a cabeça (backbone congelado) ===")
     model.fit(
         train_ds,
         validation_data=val_ds,
-        epochs=epochs
+        epochs=epochs_cabeca,
+        class_weight=class_weight,
+        callbacks=callbacks,
     )
 
-    model.save(save_path)
-    print(f"Modelo salvo com sucesso em: {save_path}")
+    # --- Fase 2: destrava as últimas camadas do backbone e ajusta fino ---
+    descongelar_backbone(backbone, camadas_para_descongelar)
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-5),  # LR bem menor — protege os pesos pré-treinados
+        loss='sparse_categorical_crossentropy',
+        metrics=['accuracy']
+    )
+    print("\n=== Fase 2: fine-tuning das últimas camadas do backbone ===")
+    model.fit(
+        train_ds,
+        validation_data=val_ds,
+        epochs=epochs_fine_tuning,
+        class_weight=class_weight,
+        callbacks=callbacks,
+    )
+
+    print(f"\nMelhor modelo (por val_accuracy) salvo automaticamente em: {save_path}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=5)
-    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--epochs_cabeca", type=int, default=10)
+    parser.add_argument("--epochs_fine_tuning", type=int, default=10)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--camadas_para_descongelar", type=int, default=20)
+    parser.add_argument("--save_path", type=str, default="ham10000_efficientnetv2.keras")
     args = parser.parse_args()
 
-    train(epochs=args.epochs, batch_size=args.batch_size)
+    train(
+        epochs_cabeca=args.epochs_cabeca,
+        epochs_fine_tuning=args.epochs_fine_tuning,
+        batch_size=args.batch_size,
+        camadas_para_descongelar=args.camadas_para_descongelar,
+        save_path=args.save_path,
+    )
