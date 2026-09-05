@@ -40,19 +40,27 @@ def carregar_extrator_de_embeddings():
       3. Gerar um token em https://huggingface.co/settings/tokens e
          exportar: export HUGGINGFACE_HUB_TOKEN=seu_token_aqui
 
+    Nota técnica: a função huggingface_hub.from_pretrained_keras foi
+    REMOVIDA na huggingface_hub v1.0 (integração com Keras 2 descontinuada).
+    Por isso baixamos o repositório manualmente com snapshot_download() e
+    carregamos com tf.keras.models.load_model() — é exatamente o que
+    from_pretrained_keras fazia internamente, só que sem depender de uma
+    função que pode sumir de novo em versões futuras.
+
     Levanta RuntimeError em vez de mascarar o problema — assim nunca se
     treina "Derm Foundation" sem saber que, na verdade, caiu para outro
     backbone.
     """
     try:
-        from huggingface_hub import from_pretrained_keras
+        from huggingface_hub import snapshot_download
     except ImportError as exc:
         raise RuntimeError(
             "Pacote 'huggingface_hub' não instalado. Rode: pip install huggingface_hub"
         ) from exc
 
     try:
-        modelo = from_pretrained_keras("google/derm-foundation")
+        pasta_local = snapshot_download(repo_id="google/derm-foundation")
+        modelo = tf.keras.models.load_model(pasta_local)
     except Exception as exc:
         raise RuntimeError(
             "Não foi possível carregar o Derm Foundation do Hugging Face. "
