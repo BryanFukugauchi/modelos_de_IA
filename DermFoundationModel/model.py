@@ -22,6 +22,8 @@ componente de fato treinado.
 
 from __future__ import annotations
 
+import os
+
 import tensorflow as tf
 from tensorflow.keras import layers, models
 
@@ -38,12 +40,16 @@ def carregar_extrator_de_embeddings():
       2. Acessar https://huggingface.co/google/derm-foundation e aceitar
          os termos de uso.
       3. Gerar um token em https://huggingface.co/settings/tokens.
-         Em terminal: export HUGGINGFACE_HUB_TOKEN=seu_token_aqui
+         Em terminal: export HF_TOKEN=seu_token_aqui
          Em notebook (Kaggle/Jupyter — 'export' não funciona aqui):
              import os
-             os.environ["HUGGINGFACE_HUB_TOKEN"] = "seu_token_aqui"
+             os.environ["HF_TOKEN"] = "seu_token_aqui"
          Ou, no Kaggle, via Add-ons > Secrets (mais seguro, evita deixar
          o token escrito no notebook).
+
+         IMPORTANTE: o nome correto da variável é HF_TOKEN (não
+         HUGGINGFACE_HUB_TOKEN — esse era o nome usado em versões mais
+         antigas da biblioteca e não é mais reconhecido).
 
     Nota técnica: a função huggingface_hub.from_pretrained_keras foi
     REMOVIDA na huggingface_hub v1.0 (integração com Keras 2 descontinuada).
@@ -63,15 +69,21 @@ def carregar_extrator_de_embeddings():
             "Pacote 'huggingface_hub' não instalado. Rode: pip install huggingface_hub"
         ) from exc
 
+    # Resolve o token explicitamente em vez de depender da checagem
+    # automática interna da biblioteca — assim o código não quebra de
+    # novo se uma futura versão mudar (mais uma vez) qual variável olha.
+    # Aceita tanto o nome atual (HF_TOKEN) quanto o antigo, por segurança.
+    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
+
     try:
-        pasta_local = snapshot_download(repo_id="google/derm-foundation")
+        pasta_local = snapshot_download(repo_id="google/derm-foundation", token=token)
         modelo = tf.keras.models.load_model(pasta_local)
     except Exception as exc:
         raise RuntimeError(
             "Não foi possível carregar o Derm Foundation do Hugging Face. "
             "Confirme que você aceitou os termos de uso em "
             "https://huggingface.co/google/derm-foundation e configurou "
-            "a variável de ambiente HUGGINGFACE_HUB_TOKEN."
+            "a variável de ambiente HF_TOKEN."
         ) from exc
 
     return modelo.signatures["serving_default"]
