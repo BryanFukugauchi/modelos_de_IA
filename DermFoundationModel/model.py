@@ -51,6 +51,7 @@ def carregar_extrator_de_embeddings():
     treina "Derm Foundation" sem saber que, na verdade, caiu para outro
     backbone.
     """
+    HUGGINGFACE_HUB_TOKEN="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"
     try:
         from huggingface_hub import snapshot_download
     except ImportError as exc:
