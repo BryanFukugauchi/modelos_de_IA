@@ -37,8 +37,13 @@ def carregar_extrator_de_embeddings():
       1. Ter uma conta no Hugging Face.
       2. Acessar https://huggingface.co/google/derm-foundation e aceitar
          os termos de uso.
-      3. Gerar um token em https://huggingface.co/settings/tokens e
-         exportar: export HUGGINGFACE_HUB_TOKEN=seu_token_aqui
+      3. Gerar um token em https://huggingface.co/settings/tokens.
+         Em terminal: export HUGGINGFACE_HUB_TOKEN=seu_token_aqui
+         Em notebook (Kaggle/Jupyter — 'export' não funciona aqui):
+             import os
+             os.environ["HUGGINGFACE_HUB_TOKEN"] = "seu_token_aqui"
+         Ou, no Kaggle, via Add-ons > Secrets (mais seguro, evita deixar
+         o token escrito no notebook).
 
     Nota técnica: a função huggingface_hub.from_pretrained_keras foi
     REMOVIDA na huggingface_hub v1.0 (integração com Keras 2 descontinuada).
@@ -51,7 +56,6 @@ def carregar_extrator_de_embeddings():
     treina "Derm Foundation" sem saber que, na verdade, caiu para outro
     backbone.
     """
-    HUGGINGFACE_HUB_TOKEN="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"
     try:
         from huggingface_hub import snapshot_download
     except ImportError as exc:
