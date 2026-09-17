@@ -13,7 +13,7 @@ CLASSES_HAM10000 = {
 }
 
 def predict(image_path, model):
-    img = tf.keras.utils.load_img(image_path, target_size=(224, 224))
+    img = tf.keras.utils.load_img(image_path, target_size=(224, 224), interpolation="bilinear")
     img_array = tf.keras.utils.img_to_array(img)
     img_array = tf.expand_dims(img_array, axis=0)
 

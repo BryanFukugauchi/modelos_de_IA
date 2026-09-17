@@ -53,10 +53,16 @@ def carregar_extrator_de_embeddings():
 
     Nota técnica: a função huggingface_hub.from_pretrained_keras foi
     REMOVIDA na huggingface_hub v1.0 (integração com Keras 2 descontinuada).
-    Por isso baixamos o repositório manualmente com snapshot_download() e
-    carregamos com tf.keras.models.load_model() — é exatamente o que
-    from_pretrained_keras fazia internamente, só que sem depender de uma
-    função que pode sumir de novo em versões futuras.
+    Por isso baixamos o repositório manualmente com snapshot_download().
+
+    Nota técnica 2: o repositório do Derm Foundation está no formato
+    legado do TensorFlow SavedModel. O Keras 3 (padrão em versões
+    recentes do TensorFlow) REMOVEU o suporte a esse formato em
+    tf.keras.models.load_model() — só aceita .keras (v3) ou .h5 agora.
+    Por isso carregamos com tf.saved_model.load() em vez de
+    tf.keras.models.load_model(): é a API de mais baixo nível do próprio
+    TensorFlow (não do Keras), não afetada por essa mudança, e devolve
+    o mesmo objeto com .signatures que a gente precisa.
 
     Levanta RuntimeError em vez de mascarar o problema — assim nunca se
     treina "Derm Foundation" sem saber que, na verdade, caiu para outro
@@ -77,7 +83,7 @@ def carregar_extrator_de_embeddings():
 
     try:
         pasta_local = snapshot_download(repo_id="google/derm-foundation", token=token)
-        modelo = tf.keras.models.load_model(pasta_local)
+        modelo = tf.saved_model.load(pasta_local)
     except Exception as exc:
         raise RuntimeError(
             "Não foi possível carregar o Derm Foundation do Hugging Face. "

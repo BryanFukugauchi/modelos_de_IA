@@ -5,24 +5,30 @@ Diferente do EfficientNetV2/ConvNeXt, aqui NÃO se treina uma rede de
 imagem fim-a-fim: o backbone (real ou substituto, ver model.py) fica
 congelado e é usado só para gerar um vetor de características por
 imagem. O que efetivamente é treinado é um classificador pequeno em
-cima desses vetores — é o uso recomendado oficialmente para o Derm
-Foundation.
+cima desses vetores.
 
-Os embeddings são calculados uma vez e cacheados em disco
-(EMBEDDINGS_CACHE), já que recalculá-los a cada execução seria caro.
+Mudanças mais recentes:
+  - Usa dataset_ham10000.py (módulo compartilhado) para treino/validação/
+    teste — mesmo split de teste que EfficientNetV2/ConvNeXt, para
+    comparação justa entre os três em comparar_modelos.py.
+  - Os embeddings são calculados uma vez para o dataset inteiro e
+    cacheados (EMBEDDINGS_CACHE); o split é aplicado depois, fatiando
+    esse array pelos mesmos índices do dataframe.
 """
 
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
+import sys
 import argparse
-import glob
 
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from dataset_ham10000 import load_ham10000_data, criar_splits
 
 from model import (
     build_model,
@@ -34,34 +40,6 @@ from model import (
 
 EMBEDDINGS_CACHE = "derm_embeddings_cache.npz"
 USE_REAL_DERM_FOUNDATION = True  # Mude para False enquanto não tiver o acesso via Hugging Face configurado
-
-
-def load_ham10000_data():
-    """Mesma lógica usada em EfficientNetV2/ConvNeXt — busca o CSV e mapeia as imagens."""
-    csv_matches = glob.glob("/kaggle/input/**/HAM10000_metadata.csv", recursive=True)
-    if not csv_matches:
-        raise FileNotFoundError(
-            "Não foi possível encontrar HAM10000_metadata.csv em /kaggle/input/."
-        )
-
-    metadata_path = csv_matches[0]
-    base_dir = os.path.dirname(metadata_path)
-    print(f"Dataset localizado com sucesso em: {base_dir}")
-
-    df = pd.read_csv(metadata_path)
-
-    all_image_paths = glob.glob(os.path.join(base_dir, "**", "*.jpg"), recursive=True)
-    image_path_map = {os.path.splitext(os.path.basename(x))[0]: x for x in all_image_paths}
-    df["path"] = df["image_id"].map(image_path_map)
-
-    # Descarta linhas cujo image_id não tem um .jpg correspondente no disco.
-    linhas_sem_imagem = df["path"].isna().sum()
-    if linhas_sem_imagem > 0:
-        print(f"Aviso: {linhas_sem_imagem} imagens do CSV não foram encontradas no disco e serão ignoradas.")
-        df = df.dropna(subset=["path"]).reset_index(drop=True)
-
-    df["label"] = pd.Categorical(df["dx"]).codes
-    return df
 
 
 def obter_funcao_de_embedding():
@@ -81,9 +59,10 @@ def obter_funcao_de_embedding():
 
 def calcular_ou_carregar_embeddings(df: pd.DataFrame) -> np.ndarray:
     """
-    Calcula o embedding de cada imagem uma única vez e guarda em disco.
-    Em execuções seguintes, se o cache já existir e tiver o mesmo número
-    de imagens, ele é reaproveitado — evita recalcular tudo de novo.
+    Calcula o embedding de cada imagem do dataframe completo, uma única
+    vez, e guarda em disco. O resultado está na mesma ordem de df — para
+    pegar só o pedaço de treino/validação/teste, fatie por df.index
+    (ver train()).
     """
     if os.path.exists(EMBEDDINGS_CACHE):
         cache = np.load(EMBEDDINGS_CACHE)
@@ -118,17 +97,21 @@ def train(epochs=20, batch_size=32, save_path="derm_foundation_model.keras"):
     df = load_ham10000_data()
     print(f"Total de imagens encontradas: {len(df)}")
 
-    embeddings = calcular_ou_carregar_embeddings(df)
-    labels = df["label"].values
+    embeddings_completo = calcular_ou_carregar_embeddings(df)
 
-    X_train, X_val, y_train, y_val = train_test_split(
-        embeddings, labels, test_size=0.2, random_state=42, stratify=labels
-    )
+    train_df, val_df, test_df = criar_splits(df)
+    print(f"Treino: {len(train_df)} | Validação: {len(val_df)} | Teste (reservado): {len(test_df)}")
+
+    # Fatia o array de embeddings pelos mesmos índices do split — garante
+    # que treino/validação/teste sejam exatamente as mesmas imagens usadas
+    # pelos outros modelos.
+    X_train, y_train = embeddings_completo[train_df.index.values], train_df["label"].values
+    X_val, y_val = embeddings_completo[val_df.index.values], val_df["label"].values
 
     class_weight = calcular_class_weight(y_train)
     print(f"Pesos de classe (compensando desbalanceamento): {class_weight}")
 
-    model = build_model(num_classes=len(np.unique(labels)))
+    model = build_model(num_classes=df["label"].nunique())
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
         loss="sparse_categorical_crossentropy",
@@ -151,6 +134,7 @@ def train(epochs=20, batch_size=32, save_path="derm_foundation_model.keras"):
     )
 
     print(f"\nMelhor modelo (por val_accuracy) salvo automaticamente em: {save_path}")
+    print("Rode comparar_modelos.py depois de treinar os três para ver o desempenho no teste reservado.")
 
 
 if __name__ == "__main__":
