@@ -122,6 +122,29 @@ def imagem_para_embedding(caminho_imagem: str, infer_fn) -> tf.Tensor:
     saida = infer_fn(inputs=tf.constant([exemplo]))
     return tf.reshape(saida["embedding"], [-1])
 
+def carregar_extrator_de_embeddings():
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as exc:
+        raise RuntimeError(
+            "Pacote 'huggingface_hub' não instalado. Rode: pip install huggingface_hub"
+        ) from exc
+
+    try:
+        import os
+        token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
+        pasta_local = snapshot_download(repo_id="google/derm-foundation", token=token)
+        
+        # Carrega o SavedModel nativamente no TensorFlow (compatível com Keras 3)
+        modelo = tf.saved_model.load(pasta_local)
+        return modelo.signatures["serving_default"]
+    except Exception as exc:
+        raise RuntimeError(
+            "Não foi possível carregar o Derm Foundation do Hugging Face. "
+            "Confirme que você aceitou os termos de uso em "
+            "https://huggingface.co/google/derm-foundation e configurou "
+            "a variável de ambiente HF_TOKEN."
+        ) from exc
 
 def carregar_extrator_substituto() -> tf.keras.Model:
     """
