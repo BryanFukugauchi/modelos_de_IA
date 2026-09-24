@@ -2,28 +2,19 @@
 model.py — Extratores de embedding do Derm Foundation e o classificador
 leve treinado em cima desses embeddings.
 
-IMPORTANTE (motivo da reescrita): o Derm Foundation NÃO é um backbone de
-imagem "normal" como o EfficientNetV2/ConvNeXt:
-
+IMPORTANTE:
   1. Não está em tfhub.dev — é distribuído via Hugging Face Hub, com
-     acesso restrito (é preciso aceitar os termos de uso do Google
-     Health AI Developer Foundations antes de baixar os pesos).
-  2. Espera imagens PNG de 448x448 dentro de um tf.train.Example
-     serializado — não aceita um tensor de pixels puro.
-  3. Só devolve um vetor de embedding de 6144 dimensões — não é uma rede
-     de classificação fim-a-fim. O uso oficial recomendado é: gerar os
-     embeddings uma vez (backbone congelado) e treinar um classificador
-     pequeno em cima deles.
-
-Por isso este módulo expõe duas partes separadas: o extrator de
-embeddings (real ou substituto) e o classificador leve, que é o único
-componente de fato treinado.
+     acesso restrito (é preciso aceitar os termos de uso antes de baixar).
+  2. Espera imagens PNG de 448x448 dentro de um tf.train.Example serializado.
+  3. Devolve um vetor de embedding de 6144 dimensões.
 """
 
 from __future__ import annotations
 
+from io import BytesIO
 import os
 
+from PIL import Image
 import tensorflow as tf
 from tensorflow.keras import layers, models
 
@@ -32,42 +23,7 @@ DERM_FOUNDATION_INPUT_SIZE = (448, 448)
 
 
 def carregar_extrator_de_embeddings():
-    """
-    Carrega o modelo REAL do Derm Foundation via Hugging Face Hub.
-
-    Pré-requisitos (feitos uma única vez, fora do código):
-      1. Ter uma conta no Hugging Face.
-      2. Acessar https://huggingface.co/google/derm-foundation e aceitar
-         os termos de uso.
-      3. Gerar um token em https://huggingface.co/settings/tokens.
-         Em terminal: export HF_TOKEN=seu_token_aqui
-         Em notebook (Kaggle/Jupyter — 'export' não funciona aqui):
-             import os
-             os.environ["HF_TOKEN"] = "seu_token_aqui"
-         Ou, no Kaggle, via Add-ons > Secrets (mais seguro, evita deixar
-         o token escrito no notebook).
-
-         IMPORTANTE: o nome correto da variável é HF_TOKEN (não
-         HUGGINGFACE_HUB_TOKEN — esse era o nome usado em versões mais
-         antigas da biblioteca e não é mais reconhecido).
-
-    Nota técnica: a função huggingface_hub.from_pretrained_keras foi
-    REMOVIDA na huggingface_hub v1.0 (integração com Keras 2 descontinuada).
-    Por isso baixamos o repositório manualmente com snapshot_download().
-
-    Nota técnica 2: o repositório do Derm Foundation está no formato
-    legado do TensorFlow SavedModel. O Keras 3 (padrão em versões
-    recentes do TensorFlow) REMOVEU o suporte a esse formato em
-    tf.keras.models.load_model() — só aceita .keras (v3) ou .h5 agora.
-    Por isso carregamos com tf.saved_model.load() em vez de
-    tf.keras.models.load_model(): é a API de mais baixo nível do próprio
-    TensorFlow (não do Keras), não afetada por essa mudança, e devolve
-    o mesmo objeto com .signatures que a gente precisa.
-
-    Levanta RuntimeError em vez de mascarar o problema — assim nunca se
-    treina "Derm Foundation" sem saber que, na verdade, caiu para outro
-    backbone.
-    """
+    """Carrega o modelo REAL do Derm Foundation via Hugging Face Hub."""
     try:
         from huggingface_hub import snapshot_download
     except ImportError as exc:
@@ -75,10 +31,6 @@ def carregar_extrator_de_embeddings():
             "Pacote 'huggingface_hub' não instalado. Rode: pip install huggingface_hub"
         ) from exc
 
-    # Resolve o token explicitamente em vez de depender da checagem
-    # automática interna da biblioteca — assim o código não quebra de
-    # novo se uma futura versão mudar (mais uma vez) qual variável olha.
-    # Aceita tanto o nome atual (HF_TOKEN) quanto o antigo, por segurança.
     token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
 
     try:
@@ -101,14 +53,12 @@ def imagem_para_embedding(caminho_imagem: str, infer_fn) -> tf.Tensor:
     espera (PNG 448x448 dentro de um tf.train.Example serializado) e
     devolve o vetor de embedding de 6144 dimensões.
     """
-    from io import BytesIO
-
-    from PIL import Image
-
+    # 1. Processa e redimensiona a imagem
     img = Image.open(caminho_imagem).convert("RGB").resize(DERM_FOUNDATION_INPUT_SIZE)
     buffer = BytesIO()
     img.save(buffer, format="PNG")
 
+    # 2. Serializa no formato tf.train.Example
     exemplo = tf.train.Example(
         features=tf.train.Features(
             feature={
@@ -119,41 +69,18 @@ def imagem_para_embedding(caminho_imagem: str, infer_fn) -> tf.Tensor:
         )
     ).SerializeToString()
 
-    saida = infer_fn(inputs=tf.constant([exemplo]))
+    # 3. Força a execução na CPU para evitar incompatibilidade com CUDA/XLA na GPU
+    with tf.device("/CPU:0"):
+        saida = infer_fn(inputs=tf.constant([exemplo]))
+
     return tf.reshape(saida["embedding"], [-1])
 
-def carregar_extrator_de_embeddings():
-    try:
-        from huggingface_hub import snapshot_download
-    except ImportError as exc:
-        raise RuntimeError(
-            "Pacote 'huggingface_hub' não instalado. Rode: pip install huggingface_hub"
-        ) from exc
-
-    try:
-        import os
-        token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
-        pasta_local = snapshot_download(repo_id="google/derm-foundation", token=token)
-        
-        # Carrega o SavedModel nativamente no TensorFlow (compatível com Keras 3)
-        modelo = tf.saved_model.load(pasta_local)
-        return modelo.signatures["serving_default"]
-    except Exception as exc:
-        raise RuntimeError(
-            "Não foi possível carregar o Derm Foundation do Hugging Face. "
-            "Confirme que você aceitou os termos de uso em "
-            "https://huggingface.co/google/derm-foundation e configurou "
-            "a variável de ambiente HF_TOKEN."
-        ) from exc
 
 def carregar_extrator_substituto() -> tf.keras.Model:
     """
     Extrator alternativo, local e sem necessidade de autenticação:
     ConvNeXtTiny pré-treinado na ImageNet, congelado, usado só para gerar
     um vetor de características por imagem.
-
-    ATENÇÃO: isto NÃO é o Derm Foundation real — use apenas enquanto não
-    tiver configurado o acesso via Hugging Face (Opção B).
     """
     base = tf.keras.applications.ConvNeXtTiny(
         include_top=False, weights="imagenet", pooling="avg"
@@ -170,19 +97,11 @@ def imagem_para_embedding_substituto(caminho_imagem: str, extrator: tf.keras.Mod
     return tf.reshape(extrator(array, training=False), [-1])
 
 
-def build_model(num_classes: int = 7) -> tf.keras.Model:
+def build_model(num_classes: int = 7, embedding_dim: int = EMBEDDING_DIM) -> tf.keras.Model:
     """
-    O componente treinável de fato: um classificador leve que recebe
-    embeddings JÁ CALCULADOS e aprende a mapeá-los para as classes do
-    HAM10000. O backbone pesado fica de fora deste grafo — é congelado e
-    usado só como pré-processamento, conforme a documentação oficial.
-
-    Regularização mais forte que a versão anterior (L2 + dropout maior):
-    como o classificador é a única parte treinável, com poucas dezenas
-    de imagens por classe ele overfita rápido nos embeddings de treino
-    se não for contido.
+    Classificador leve que recebe os embeddings e aprende a mapeá-los para as classes.
     """
-    entradas = tf.keras.Input(shape=(EMBEDDING_DIM,))
+    entradas = tf.keras.Input(shape=(embedding_dim,))
     x = layers.Dense(128, activation="relu", kernel_regularizer=tf.keras.regularizers.l2(1e-3))(entradas)
     x = layers.Dropout(0.5)(x)
     saidas = layers.Dense(num_classes, activation="softmax")(x)
