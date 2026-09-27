@@ -35,7 +35,7 @@ def carregar_extrator_de_embeddings():
 
     try:
         pasta_local = snapshot_download(repo_id="google/derm-foundation", token=token)
-        modelo = tf.saved_model.load(pasta_local)
+        modelo = tf.saved_model.load(pasta_local)  # sem forçar dispositivo — usa a GPU se disponível
     except Exception as exc:
         raise RuntimeError(
             "Não foi possível carregar o Derm Foundation do Hugging Face. "
@@ -69,9 +69,9 @@ def imagem_para_embedding(caminho_imagem: str, infer_fn) -> tf.Tensor:
         )
     ).SerializeToString()
 
-    # 3. Força a execução na CPU para evitar incompatibilidade com CUDA/XLA na GPU
-    with tf.device("/CPU:0"):
-        saida = infer_fn(inputs=tf.constant([exemplo]))
+    # Roda no dispositivo padrão (GPU, se disponível) — consistente com onde
+    # o modelo foi carregado em carregar_extrator_de_embeddings().
+    saida = infer_fn(inputs=tf.constant([exemplo]))
 
     return tf.reshape(saida["embedding"], [-1])
 
