@@ -35,7 +35,14 @@ def carregar_extrator_de_embeddings():
 
     try:
         pasta_local = snapshot_download(repo_id="google/derm-foundation", token=token)
-        modelo = tf.saved_model.load(pasta_local)  # sem forçar dispositivo — usa a GPU se disponível
+        # Carrega na CPU: parte do modelo roda via XlaCallModule (StableHLO/JAX
+        # convertido para TF), compilado pelo Google especificamente para a
+        # plataforma CPU — confirmado por um NotFoundError explícito ao tentar
+        # rodar na GPU. Não é uma escolha de configuração, é uma limitação do
+        # próprio artefato do modelo. A inferência em imagem_para_embedding()
+        # também precisa ficar consistente na CPU.
+        with tf.device("/CPU:0"):
+            modelo = tf.saved_model.load(pasta_local)
     except Exception as exc:
         raise RuntimeError(
             "Não foi possível carregar o Derm Foundation do Hugging Face. "
@@ -69,9 +76,10 @@ def imagem_para_embedding(caminho_imagem: str, infer_fn) -> tf.Tensor:
         )
     ).SerializeToString()
 
-    # Roda no dispositivo padrão (GPU, se disponível) — consistente com onde
-    # o modelo foi carregado em carregar_extrator_de_embeddings().
-    saida = infer_fn(inputs=tf.constant([exemplo]))
+    # Confirmado por teste real: parte do modelo (XlaCallModule) só roda em
+    # CPU — precisa ficar no mesmo dispositivo de onde foi carregado.
+    with tf.device("/CPU:0"):
+        saida = infer_fn(inputs=tf.constant([exemplo]))
 
     return tf.reshape(saida["embedding"], [-1])
 
