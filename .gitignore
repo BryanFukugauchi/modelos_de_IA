@@ -1,0 +1,7 @@
+.env
+
+venv/
+
+HAM10000_metadata.csv
+HAM10000_images_part_1/
+HAM10000_images_part_2/
