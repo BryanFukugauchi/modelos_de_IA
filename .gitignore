@@ -5,3 +5,12 @@ venv/
 HAM10000_metadata.csv
 HAM10000_images_part_1/
 HAM10000_images_part_2/
+
+# Ignorar arquivos de cache de embeddings
+*.npz
+derm_embeddings_cache.npz
+
+# Ignorar modelos treinados pesados
+*.keras
+*.pth
+*.pkl
