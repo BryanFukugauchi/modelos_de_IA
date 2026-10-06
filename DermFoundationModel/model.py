@@ -105,12 +105,20 @@ def imagem_para_embedding_substituto(caminho_imagem: str, extrator: tf.keras.Mod
     return tf.reshape(extrator(array, training=False), [-1])
 
 
-def build_model(num_classes: int = 7, embedding_dim: int = EMBEDDING_DIM) -> tf.keras.Model:
+def build_model(num_classes: int = 7, embedding_dim: int = EMBEDDING_DIM, X_adapt=None):
     """
-    Classificador leve que recebe os embeddings e aprende a mapeá-los para as classes.
+    Classificador leve sobre os embeddings (e metadados, se concatenados).
+    A normalização fica dentro do modelo, então viaja junto com o .keras.
     """
     entradas = tf.keras.Input(shape=(embedding_dim,))
-    x = layers.Dense(128, activation="relu", kernel_regularizer=tf.keras.regularizers.l2(1e-3))(entradas)
-    x = layers.Dropout(0.5)(x)
+    norm = layers.Normalization()
+    if X_adapt is not None:
+        norm.adapt(X_adapt)  # média/desvio calculados só no treino
+    x = norm(entradas)
+    x = layers.Dense(256, activation="relu",
+                     kernel_regularizer=tf.keras.regularizers.l2(1e-4))(x)
+    x = layers.Dropout(0.3)(x)
+    x = layers.Dense(64, activation="relu")(x)
+    x = layers.Dropout(0.2)(x)
     saidas = layers.Dense(num_classes, activation="softmax")(x)
     return models.Model(entradas, saidas, name="DermFoundation_Classifier")

@@ -1,7 +1,8 @@
 import os
 import pandas as pd
 from dotenv import load_dotenv
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedGroupKFold
+import numpy as np
 
 # 1. Carrega as variáveis de ambiente do arquivo .env
 load_dotenv()
@@ -59,10 +60,19 @@ def carregar_dataset(caminho_raiz=DATASET_PATH):
     print(f"Sucesso! {len(df)} imagens foram localizadas.")
     return df
 
-def criar_splits(df): 
-    """Separa em 80% Treino, 10% Validação e 10% Teste mantendo a proporção das doenças.""" 
-    train_df, test_val_df = train_test_split(df, test_size=0.2, random_state=42, stratify=df["label"]) 
-    val_df, test_df = train_test_split(test_val_df, test_size=0.5, random_state=42, stratify=test_val_df["label"]) 
+def criar_splits(df, seed=42):
+    """~80% treino, 10% validação, 10% teste, sem repetir lesion_id entre os conjuntos."""
+    sgkf = StratifiedGroupKFold(n_splits=10, shuffle=True, random_state=seed)
+    folds = [idx for _, idx in sgkf.split(df, df["label"], groups=df["lesion_id"])]
+
+    test_df = df.iloc[folds[0]]
+    val_df = df.iloc[folds[1]]
+    train_df = df.iloc[np.concatenate(folds[2:])]
+
+    # Garante que não há lesão compartilhada entre os conjuntos
+    assert not set(train_df["lesion_id"]) & set(val_df["lesion_id"])
+    assert not set(train_df["lesion_id"]) & set(test_df["lesion_id"])
+    assert not set(val_df["lesion_id"]) & set(test_df["lesion_id"])
     return train_df, val_df, test_df
 
 load_ham10000_data = carregar_dataset      
