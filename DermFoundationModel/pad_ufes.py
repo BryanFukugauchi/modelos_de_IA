@@ -105,11 +105,14 @@ def carregar_pad(raiz: str = PAD_PATH) -> pd.DataFrame:
 
 
 def calcular_ou_carregar_embeddings(df: pd.DataFrame) -> np.ndarray:
-    ids = df["img_id"].values.astype(str)
+    # dtype="U" garante um array de texto comum (no pandas novo, .values.astype(str)
+    # pode virar array de objetos, que o numpy só carrega com pickle).
+    ids = np.array(df["img_id"].astype(str).tolist(), dtype="U")
 
     if os.path.exists(PAD_CACHE):
-        cache = np.load(PAD_CACHE)
-        if "ids" in cache.files and np.array_equal(cache["ids"], ids):
+        # allow_pickle=True é seguro aqui: o arquivo foi gerado por este próprio script.
+        cache = np.load(PAD_CACHE, allow_pickle=True)
+        if "ids" in cache.files and [str(x) for x in cache["ids"]] == ids.tolist():
             print(f">> Reaproveitando cache: {PAD_CACHE}")
             return cache["embeddings"]
         print(">> Cache do PAD diferente do dataset atual — recalculando...")
@@ -181,11 +184,16 @@ def avaliar_externo(df, emb, args):
     print("\n================ AVALIAÇÃO EXTERNA (modelo HAM10000 -> PAD-UFES-20) ================")
     modelo = tf.keras.models.load_model(args.modelo)
 
-    X = np.hstack([emb, meta_formato_ham(df)])
     esperado = modelo.input_shape[1]
+    if esperado == emb.shape[1]:
+        X = emb
+        print(f"Modelo com {esperado} entradas: treinado SÓ com embeddings (sem metadados).")
+    else:
+        X = np.hstack([emb, meta_formato_ham(df)])
+        print(f"Modelo com {esperado} entradas: embeddings + metadados.")
     assert X.shape[1] == esperado, (
         f"O modelo espera {esperado} entradas, mas montei {X.shape[1]}. "
-        f"Treinou com metadados? Se treinou só com embeddings (6144), use embeddings sem metadados."
+        f"O formato dos metadados no treino do HAM10000 foi diferente do que o script reproduz."
     )
 
     y = df["diagnostic"].map(PAD_PARA_HAM).values.astype(int)
