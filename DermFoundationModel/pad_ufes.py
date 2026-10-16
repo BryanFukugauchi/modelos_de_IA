@@ -294,7 +294,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     df = carregar_pad()
-    emb = calcular_ou_carregar_embeddings(df)
+    emb = calcular_ou_carregar_embeddings(df)  # cache continua com todas as imagens
+
+    # Etapa 0: remove os pacientes reservados para o teste final
+    holdout = set(pd.read_csv("holdout_pacientes.csv")["patient_id"])
+    dev = ~df["patient_id"].isin(holdout).values
+    df, emb = df[dev].reset_index(drop=True), emb[dev]
+    print(f">> Holdout removido: {(~dev).sum()} imagens. Restam {len(df)} para desenvolvimento.")
 
     if args.modo in ("externo", "ambos"):
         avaliar_externo(df, emb, args)
