@@ -1,0 +1,52 @@
+{
+  "criado_em": "2026-10-16",
+  "base": "oof_sintomas.npz",
+  "n_seeds": 5,
+  "probabilidades": "média dos 5 classificadores (uma seed cada); o app deve fazer o mesmo",
+  "classes": [
+    "ACK",
+    "BCC",
+    "MEL",
+    "NEV",
+    "SCC",
+    "SEK"
+  ],
+  "classes_cancer": [
+    "BCC",
+    "MEL",
+    "SCC"
+  ],
+  "calibracao": {
+    "temperatura": 1.444905582944212,
+    "vies": {
+      "ACK": 0.43242995007341123,
+      "BCC": 0.5793680008633286,
+      "MEL": -0.72620970372104,
+      "NEV": -0.08450662627700684,
+      "SCC": -0.04031593924192972,
+      "SEK": -0.16076957109253906
+    }
+  },
+  "sensibilidades_alvo": {
+    "MEL": 0.9,
+    "NAO_MELANOMA": 0.95
+  },
+  "limiares": {
+    "MEL": 0.09083974883454013,
+    "NAO_MELANOMA": 0.3070408439853798
+  },
+  "niveis": [
+    "ROTINA",
+    "ACOMPANHAMENTO",
+    "MEDIA",
+    "ALTA"
+  ],
+  "regras_niveis": {
+    "ALTA": "MEL é a classe mais provável, ou P(MEL) calibrada >= limiares.MEL",
+    "MEDIA": "BCC ou SCC é a classe mais provável, ou P(BCC)+P(SCC) calibrada >= limiares.NAO_MELANOMA",
+    "ACOMPANHAMENTO": "ACK é a classe mais provável",
+    "ROTINA": "nenhum critério acima",
+    "combinacao": "vale o nível mais grave atingido",
+    "regra_clinica_previa": "cresceu OU mudou = no mínimo MEDIA ('não sei' não altera) — validar na Etapa 4"
+  }
+}

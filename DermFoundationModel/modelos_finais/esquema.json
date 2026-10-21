@@ -1,0 +1,132 @@
+{
+  "criado_em": "2026-10-19",
+  "classes": [
+    "ACK",
+    "BCC",
+    "MEL",
+    "NEV",
+    "SCC",
+    "SEK"
+  ],
+  "nivel_metadados": "sintomas",
+  "n_entradas": 6164,
+  "embedding": {
+    "modelo": "google/derm-foundation (Hugging Face)",
+    "dimensao": 6144,
+    "preprocessamento": "RGB, redimensionada para 448x448 (PIL resize), salva como PNG dentro de um tf.train.Example com a chave 'image/encoded'; inferência na CPU"
+  },
+  "formulario": {
+    "idade": "anos; entra como idade/100; ausente = 0",
+    "regiao": {
+      "valores": [
+        "ABDOMEN",
+        "ARM",
+        "BACK",
+        "CHEST",
+        "EAR",
+        "FACE",
+        "FOOT",
+        "FOREARM",
+        "HAND",
+        "LIP",
+        "NECK",
+        "NOSE",
+        "SCALP",
+        "THIGH"
+      ],
+      "outra_regiao": "reg_OUTRA = 1"
+    },
+    "sintomas": {
+      "campos": [
+        "bleed",
+        "itch",
+        "hurt",
+        "elevation"
+      ],
+      "codificacao": "sim = 1; não ou não sei = 0"
+    },
+    "fora_do_modelo": [
+      "grew",
+      "changed",
+      "gender",
+      "skin_cancer_history",
+      "cancer_history"
+    ],
+    "alerta_clinico": "grew OU changed = sim -> alerta para o profissional (não altera o nível)"
+  },
+  "ordem_das_features": [
+    "age",
+    "reg_ABDOMEN",
+    "reg_ARM",
+    "reg_BACK",
+    "reg_CHEST",
+    "reg_EAR",
+    "reg_FACE",
+    "reg_FOOT",
+    "reg_FOREARM",
+    "reg_HAND",
+    "reg_LIP",
+    "reg_NECK",
+    "reg_NOSE",
+    "reg_SCALP",
+    "reg_THIGH",
+    "reg_OUTRA",
+    "bleed_sim",
+    "itch_sim",
+    "hurt_sim",
+    "elevation_sim"
+  ],
+  "nota_ordem": "as primeiras 6144 entradas são o embedding; depois vêm as features acima, nessa ordem",
+  "classificadores": [
+    {
+      "seed": 42,
+      "imagens_treino": 1470,
+      "imagens_val": 368,
+      "melhor_epoca": 6,
+      "val_loss": 1.1680415868759155,
+      "val_acuracia": 0.6875,
+      "arquivo": "classificador_seed42.keras"
+    },
+    {
+      "seed": 43,
+      "imagens_treino": 1470,
+      "imagens_val": 368,
+      "melhor_epoca": 2,
+      "val_loss": 0.9312566518783569,
+      "val_acuracia": 0.7472826242446899,
+      "arquivo": "classificador_seed43.keras"
+    },
+    {
+      "seed": 44,
+      "imagens_treino": 1470,
+      "imagens_val": 368,
+      "melhor_epoca": 4,
+      "val_loss": 0.9393168687820435,
+      "val_acuracia": 0.7364130616188049,
+      "arquivo": "classificador_seed44.keras"
+    },
+    {
+      "seed": 45,
+      "imagens_treino": 1470,
+      "imagens_val": 368,
+      "melhor_epoca": 3,
+      "val_loss": 0.9263442754745483,
+      "val_acuracia": 0.7527173757553101,
+      "arquivo": "classificador_seed45.keras"
+    },
+    {
+      "seed": 46,
+      "imagens_treino": 1470,
+      "imagens_val": 368,
+      "melhor_epoca": 4,
+      "val_loss": 1.0509470701217651,
+      "val_acuracia": 0.739130437374115,
+      "arquivo": "classificador_seed46.keras"
+    }
+  ],
+  "agregacao": "média simples das probabilidades dos classificadores",
+  "holdout_excluido": {
+    "arquivo": "holdout_pacientes.csv",
+    "sha256": "d20faf3d9c292080d6bb0be42fc46fa236ef0dbb23ced5a2d829e810abf345e7"
+  }
+}
